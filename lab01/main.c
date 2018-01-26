@@ -3,8 +3,8 @@
 #include <math.h>
 #include <time.h>
 
-#define ATTEMPTS	50			// количество замеров длительности вычислений (экспериментов)
-#define RANK		2000		// порядок матрицы
+#define ATTEMPTS	20			// количество замеров длительности вычислений (экспериментов)
+#define RANK		1000		// порядок матрицы
 #define QRAN		(RANK*RANK) // количество элементов в квадратной матрице порядка RANK
 
 // vectors ====================================================================
@@ -20,9 +20,14 @@ static inline void vRand( vector vctr ) {
 		vctr[ k ] = drand48() * 1e2;
 }
 
+static inline int min( const register int a, const register int b ) {
+	return a < b ? a : b;
+}
+
 static inline void vDiff( const vector one, const vector two, vector res ) {
-	for( register int k = 0; k < RANK; k++ )
-		res[ k ] = one[ k ] - two[ k ]; // допустима оптимизация 6 ("разделение на блоки")
+	for( register int k = 0; k < RANK; k += 100 )
+		for( register int K = k; K < min( k + 100, RANK ); K++ )
+			res[ K ] = one[ K ] - two[ K ]; // осуществлена оптимизация 6 ("разделение на блоки")
 }
 
 static inline double vProd( const vector one, const vector two ) {

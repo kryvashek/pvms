@@ -3,8 +3,8 @@
 #include <math.h>
 #include <time.h>
 
-#define ATTEMPTS	50			// количество замеров длительности вычислений (экспериментов)
-#define RANK		2000		// порядок матрицы
+#define ATTEMPTS	20			// количество замеров длительности вычислений (экспериментов)
+#define RANK		1000		// порядок матрицы
 #define QRAN		(RANK*RANK) // количество элементов в квадратной матрице порядка RANK
 
 // vectors ====================================================================
@@ -60,9 +60,13 @@ static inline void mDiff( const matrix one, const matrix two, matrix res ) {
 }
 
 static inline void mTrans( const matrix mtx, matrix res ) {
-	for( register int i = 0; i < RANK; i++ )
-		for( register int j = 0; j < RANK; j++ )
-			res[ j * RANK + i ] = mtx[ i * RANK + j ]; // допустима оптимизация 5 ("развёртка цикла")
+	for( register int i = 0; i < RANK; i += 4 )
+		for( register int j = 0; j < RANK; j++ ) {
+			res[ j * RANK + i ] 	= mtx[ i * RANK + j ]; // осуществлена оптимизация 5 ("развёртка цикла")
+			res[ j * RANK + i + 1 ] = mtx[ ( i + 1 ) * RANK + j ];
+			res[ j * RANK + i + 2 ] = mtx[ ( i + 2 ) * RANK + j ];
+			res[ j * RANK + i + 3 ] = mtx[ ( i + 3 ) * RANK + j ];
+		}
 }
 
 static inline void mProd( const matrix one, const matrix two, matrix res ) {

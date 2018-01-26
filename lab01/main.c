@@ -3,8 +3,8 @@
 #include <math.h>
 #include <time.h>
 
-#define ATTEMPTS	50			// количество замеров длительности вычислений (экспериментов)
-#define RANK		2000		// порядок матрицы
+#define ATTEMPTS	20			// количество замеров длительности вычислений (экспериментов)
+#define RANK		1000		// порядок матрицы
 #define QRAN		(RANK*RANK) // количество элементов в квадратной матрице порядка RANK
 
 // vectors ====================================================================
@@ -67,17 +67,14 @@ static inline void mTrans( const matrix mtx, matrix res ) {
 
 static inline void mProd( const matrix one, const matrix two, matrix res ) {
 	matrix			tmp;
-	volatile double	sum;
 
 	tmp = mMake();
 
 	mTrans( two, tmp );
 
 	for( register int i = 0; i < QRAN; i +=RANK )
-		for( register int j = 0; j < RANK; j++ ) {
-			sum = vProd( one + i, tmp + j * RANK ); // допустима оптимизация 2 ("расширение скаляра")
-			res[ i + j ] = sum;
-		}
+		for( register int j = 0; j < RANK; j++ )
+			res[ i + j ] = vProd( one + i, tmp + j * RANK ); // осуществлена оптимизация 2 ("расширение скаляра")
 
 	free( tmp );
 }

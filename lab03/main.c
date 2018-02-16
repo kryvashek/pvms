@@ -2,10 +2,12 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <omp.h>
 
-#define ATTEMPTS	20			// количество замеров длительности вычислений (экспериментов)
-#define RANK		1000		// порядок матрицы
+#define ATTEMPTS	10			// количество замеров длительности вычислений (экспериментов)
+#define RANK		500		// порядок матрицы
 #define STEP		100			// шаг для оптимизации 6
+#define THREADS		4			// число потоков параллельной обработки
 #define QRAN		(RANK*RANK) // количество элементов в квадратной матрице порядка RANK
 
 // vectors ====================================================================
@@ -66,13 +68,15 @@ static inline void mDiff( const matrix one, const matrix two, matrix res ) {
 }
 
 static inline void mTrans( const matrix mtx, matrix res ) {
-	for( register int i = 0; i < RANK; i += 4 )
+#pragma omp parallel for
+	for( register int i = 0; i < RANK; i += 4 ) {
 		for( register int j = 0; j < RANK; j++ ) {
-			res[ j * RANK + i ] 	= mtx[ i * RANK + j ]; // осуществлена оптимизация 5 ("развёртка цикла")
+			res[ j * RANK + i ] = mtx[ i * RANK + j ]; // осуществлена оптимизация 5 ("развёртка цикла")
 			res[ j * RANK + i + 1 ] = mtx[ ( i + 1 ) * RANK + j ];
 			res[ j * RANK + i + 2 ] = mtx[ ( i + 2 ) * RANK + j ];
 			res[ j * RANK + i + 3 ] = mtx[ ( i + 3 ) * RANK + j ];
 		}
+	}
 }
 
 static inline void mProd( const matrix one, const matrix two, matrix res ) {
@@ -83,20 +87,27 @@ static inline void mProd( const matrix one, const matrix two, matrix res ) {
 	mTrans( two, tmp );
 
 #pragma omp parallel for
-	for( register int i = 0; i < QRAN; i +=RANK )
+	for( register int i = 0; i < QRAN; i += RANK ) {
 		for( register int j = 0; j < RANK; j++ )
 			res[ i + j ] = vProd( one + i, tmp + j * RANK ); // осуществлена оптимизация 2 ("расширение скаляра")
+	}
 
 	free( tmp );
 }
 
 static inline double mNorm( const matrix mtx ) {
-	register double	res = .0;
+	register double	sumRes = .0;
+	double allRes[ THREADS ] = { 0 };
 
-	for( register int i = 0; i < QRAN; i += RANK )
-		res += vProd( mtx + i, mtx + i );
+#pragma omp parallel for
+	for( register int i = 0; i < QRAN; i += RANK ) {
+		allRes[ omp_get_thread_num() ] += vProd( mtx + i, mtx + i );
+	}
 
-	return sqrt( res );
+	for( register int i = 0; i < THREADS; i++ )
+		sumRes += allRes[ i ];
+
+	return sqrt( sumRes );
 }
 
 static inline void mPrint( const matrix mtx ) {
@@ -119,12 +130,16 @@ static inline void mPrint( const matrix mtx ) {
 
 int main() {
 	double 			* A, * B, * C, period, result, average = .0;
-	struct timespec	start,
-					finish;
+//	struct timespec	start,
+//					finish;
+	double	start,
+			finish;
 
 	srand48( ( long )time( NULL ) );
 
 	A = mMake(), B = mMake(), C = mMake();
+
+	omp_set_num_threads( THREADS );
 
 	for( int i = 1; i <= ATTEMPTS; i++ ) {
 		printf( "Начат эксперимент %d\n", i );
@@ -140,14 +155,16 @@ int main() {
 		}
 
 		// отметка времени начала вычислений
-		clock_gettime( CLOCK_MONOTONIC, &start );
+		// clock_gettime( CLOCK_MONOTONIC, &start );
+		start = omp_get_wtime();
 
 		mProd( A, A, B );
 		mProd( B, A, C );
 		result = mNorm( C ); // вычисление нормы матрицы
 
 		// отметка времени окончания вычислений
-		clock_gettime( CLOCK_MONOTONIC, &finish );
+		// clock_gettime( CLOCK_MONOTONIC, &finish );
+		finish = omp_get_wtime();
 
 		// вывод результирующей матрицы в случае малого порядка
 		if( RANK < 4 ) {
@@ -156,13 +173,14 @@ int main() {
 		}
 
 		// определение длительности вычислений в микросекундах
-		period = ( double )( finish.tv_sec - start.tv_sec ) * 1e6 + ( double )( finish.tv_nsec - start.tv_nsec ) / 1e3;
+//		period = ( double )( finish.tv_sec - start.tv_sec ) * 1e6 + ( double )( finish.tv_nsec - start.tv_nsec ) / 1e3;
+		period = ( finish - start ) * 1e6;
 		average += ( period - average ) / i;
 		printf( "Норма: %f.\n", result );
 		printf( "Длительность вычислений эксперимента %d: %f мкс.\n", i, period );
 	}
 
-	printf( "Среднее время вычислений за %d экспериментов: %f мкс\n", ATTEMPTS, average );
+	printf( "Среднее время вычислений за %d экспериментов в %d потоков: %f мкс\n", ATTEMPTS, THREADS, average );
 	free( A ), free( B ), free( C );
 
 	return 0;

@@ -4,8 +4,8 @@
 #include <time.h>
 #include <omp.h>
 
-#define ATTEMPTS	8			// количество замеров длительности вычислений (экспериментов)
-#define RANK		3000		// порядок матрицы
+#define ATTEMPTS	16			// количество замеров длительности вычислений (экспериментов)
+#define RANK		750		// порядок матрицы
 #define THREADS		4			// число потоков параллельной обработки
 #define QRAN		(RANK*RANK) // количество элементов в квадратной матрице порядка RANK
 
@@ -32,13 +32,13 @@ static inline void mRand( matrix mtx ) {
 }
 
 int main( void ) {
-	double 	* A, * B, * C;
+	double 	* A, * B, * C, * T;
 	double	period, average = .0;
 	double	start, finish;
 
 	srand48( ( long )time( NULL ) );
 
-	A = mMake(), B = mMake(), C = mMake();
+	A = mMake(), B = mMake(), C = mMake(), T = mMake();
 
 	// установление числа потокв
 	omp_set_num_threads( THREADS );
@@ -49,23 +49,28 @@ int main( void ) {
 		double 	allRes[ THREADS ] = { .0 };
 		double	result = .0;
 
-		// заполнение матрицы A случайнми значениями
+		// заполнение матрицы A случайными значениями
 		mRand( A );
 
 		// отметка времени начала вычислений
 		start = omp_get_wtime();
 
 #pragma omp parallel for
+		for( register int rowIndex = 0; rowIndex < RANK; rowIndex++ )	// mTrans( A, T ); - транспонирование матрицы A
+			for( register int colIndex = 0; colIndex < RANK; colIndex++ )
+				T[ rowIndex * RANK + colIndex ] = A[ colIndex * RANK + rowIndex ];
+
+#pragma omp parallel for
 		for( register int rowStart = 0; rowStart < QRAN; rowStart += RANK ) {
 			register int	colIndex, k;
 
-			for( colIndex = 0; colIndex < RANK; colIndex++ )	// mProd( A, A, B );
+			for( colIndex = 0; colIndex < RANK; colIndex++ )	// mProd( A, T, B );
 				for( k = 0; k < RANK; k++ )
-					B[ rowStart + colIndex ] += A[ rowStart + k ] * A[ k * RANK + colIndex ];
+					B[ rowStart + colIndex ] += A[ rowStart + k ] * T[ colIndex * RANK + k ];
 
-			for( colIndex = 0; colIndex < RANK; colIndex++ )	// mProd( B, A, C );
+			for( colIndex = 0; colIndex < RANK; colIndex++ )	// mProd( B, T, C );
 				for( k = 0; k < RANK; k++ )
-					C[ rowStart + colIndex ] += B[ rowStart + k ] * A[ k * RANK + colIndex ];
+					C[ rowStart + colIndex ] += B[ rowStart + k ] * T[ colIndex * RANK + k ];
 
 			for( colIndex = 0; colIndex < RANK; colIndex++ )	// mNorm( C ); - параллельная часть
 				allRes[ omp_get_thread_num() ] += C[ rowStart + colIndex ] * C[ rowStart + colIndex ];
@@ -89,7 +94,7 @@ int main( void ) {
 	}
 
 	printf( "Среднее время вычислений за %d экспериментов в %d потоков: %f с.\n", ATTEMPTS, THREADS, average );
-	free( A ), free( B ), free( C );
+	free( A ), free( B ), free( C ); free( T );
 
 	return 0;
 }

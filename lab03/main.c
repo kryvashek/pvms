@@ -33,9 +33,8 @@ static inline void mRand( matrix mtx ) {
 
 int main( void ) {
 	double 	* A, * B, * C;
-	double	period, result = .0, average = .0;
+	double	period, average = .0;
 	double	start, finish;
-	double 	allRes[ THREADS ] = { .0 };
 
 	srand48( ( long )time( NULL ) );
 
@@ -44,26 +43,32 @@ int main( void ) {
 	// установление числа потокв
 	omp_set_num_threads( THREADS );
 
-	for( int i = 1; i <= ATTEMPTS; i++ ) {
-		printf( "Начат эксперимент %d\n", i );
-		// создание случайной матрицы
+	for( int attempt = 1; attempt <= ATTEMPTS; attempt++ ) {
+		printf( "Начат эксперимент %d\n", attempt );
+
+		double 	allRes[ THREADS ] = { .0 };
+		double	result = .0;
+
+		// заполнение матрицы A случайнми значениями
 		mRand( A );
 
 		// отметка времени начала вычислений
 		start = omp_get_wtime();
 
 #pragma omp parallel for
-		for( register int i = 0; i < QRAN; i += RANK ) {
-			for( register int j = 0; j < RANK; j++ )	// mProd( A, A, B );
-				for( register int k = 0; k < RANK; k++ )
-					B[ i + j ] += A[ i + k ] * A[ k * RANK + j ];
+		for( register int rowStart = 0; rowStart < QRAN; rowStart += RANK ) {
+			register int	colIndex, k;
 
-			for( register int j = 0; j < RANK; j++ )	// mProd( B, A, C );
-				for( register int k = 0; k < RANK; k++ )
-					C[ i + j ] += B[ i + k ] * A[ k * RANK + j ];
+			for( colIndex = 0; colIndex < RANK; colIndex++ )	// mProd( A, A, B );
+				for( k = 0; k < RANK; k++ )
+					B[ rowStart + colIndex ] += A[ rowStart + k ] * A[ k * RANK + colIndex ];
 
-			for( register int k = 0; k < RANK; k++ )	// mNorm( C ); - параллельная часть
-				allRes[ omp_get_thread_num() ] += C[ i + k ] * C[ i + k ];
+			for( colIndex = 0; colIndex < RANK; colIndex++ )	// mProd( B, A, C );
+				for( k = 0; k < RANK; k++ )
+					C[ rowStart + colIndex ] += B[ rowStart + k ] * A[ k * RANK + colIndex ];
+
+			for( colIndex = 0; colIndex < RANK; colIndex++ )	// mNorm( C ); - параллельная часть
+				allRes[ omp_get_thread_num() ] += C[ rowStart + colIndex ] * C[ rowStart + colIndex ];
 		}
 
 		for( register int k = 0; k < THREADS; k++ )	// mNorm( C ); - последовательная часть
@@ -77,10 +82,10 @@ int main( void ) {
 		period = finish - start;
 
 		// устойчивое вычисление среднего времени выполнения
-		average += ( period - average ) / i;
+		average += ( period - average ) / attempt;
 
 		printf( "Норма: %f.\n", result );
-		printf( "Длительность вычислений эксперимента %d: %f с.\n", i, period );
+		printf( "Длительность вычислений эксперимента %d: %f с.\n", attempt, period );
 	}
 
 	printf( "Среднее время вычислений за %d экспериментов в %d потоков: %f с.\n", ATTEMPTS, THREADS, average );

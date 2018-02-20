@@ -5,13 +5,20 @@
 #include <omp.h>
 #include <string.h>
 
+#define ERROR		1.0
+#define MAGNITUDE	1e1
+#define SCHEMES		4
+#define PARASCHEMES	3
+#define THREADVARS	3
+#define RANKVARS	3
+
 // vectors ====================================================================
 
 typedef double	* vector;
 
 static inline void vRand( const vector vctr, const int rank ) {
 	for( register int k = 0; k < rank; k++ )
-		vctr[ k ] = drand48() * 1e2;
+		vctr[ k ] = drand48() * MAGNITUDE;
 }
 
 static inline double vProd( const vector one, const vector two, const int rank ) {
@@ -241,15 +248,19 @@ static inline double recalcAverage( const double average, const int number, cons
 }
 
 int main( void ) {
-	const int	threads[ 3 ] = { 1, 2, 4 },
-				rank[ 3 ] = { 500, 2000, 3000 },
-				attempts[ 3 ][ 3 ] = { { 20, 30, 40 }, // для порядка матрицы 500
+	const int	threads[ THREADVARS ] = { 1, 2, 4 },
+				rank[ RANKVARS ] = { 500, 2000, 3000 },
+//				rank[ RANKVARS ] = { 300, 600, 1200 },
+				attempts[ RANKVARS ][ THREADVARS ] = { { 20, 30, 40 }, // для порядка матрицы 500
 								   { 10, 15, 20 }, // для порядка матрицы 2000
 								   { 5, 8, 10 } }; // для порядка матрицы 3000
-	double		result[ 4 ],
+//				attempts[ RANKVARS ][ THREADVARS ] = { { 12, 16, 20 }, // для порядка матрицы 300
+//								   { 6, 8, 10 }, // для порядка матрицы 600
+//								   { 3, 4, 5 } }; // для порядка матрицы 1200
+	double		result[ SCHEMES ],
 				period,
-				average[ 4 ];
-	int			diffs[ 3 ];
+				average[ SCHEMES ];
+	int			diffs[ PARASCHEMES ];
 	matrix 		A, B, C;
 
 	printf( "Начата серия экспериментов по следующим схемам: \n"
@@ -257,27 +268,29 @@ int main( void ) {
 				"\t- схема 1: последовательный алгоритм, снабжённый директивами '#pragma omp parallel for'\n"
 				"\t- схема 2: параллельный алгоритм\n"
 				"\t- схема 3: параллельный алгоритм с предварительным транспонированием\n" );
+	fflush( stdout );
 
 	srand48( ( long )time( NULL ) );
 
-	for( register int rankIdx = 0; rankIdx < 3; rankIdx++ ) {
+	for( register int rankIdx = 0; rankIdx < RANKVARS; rankIdx++ ) {
 		// выделение памяти под матрицы
 		A = mMake( rank[ rankIdx ] ), B = mMake( rank[ rankIdx ] ), C = mMake( rank[ rankIdx ] );
 
-		for( register int threadsIdx = 0; threadsIdx < 3; threadsIdx++ ) {
+		for( register int threadsIdx = 0; threadsIdx < THREADVARS; threadsIdx++ ) {
 			printf( "\nНачата серия экспериментов:\n"
 						"\t- порядок: %d\n"
 						"\t- потоков: %d\n"
 						"\t- экспериментов: %d\n", rank[ rankIdx ], threads[ threadsIdx ], attempts[ rankIdx ][ threadsIdx ] );
+			fflush( stdout );
 
 			// установление числа потоков
 			omp_set_num_threads( threads[ threadsIdx ] );
 
 			// обнуление средних значений
-			memset( average, 0, 4 * sizeof( double ) );
+			memset( average, 0, SCHEMES * sizeof( double ) );
 
 			// обнуление числа отличий от эталона
-			memset( diffs, 0, 3 * sizeof( int ) );
+			memset( diffs, 0, PARASCHEMES * sizeof( int ) );
 
 			for( int attempt = 1; attempt <= attempts[ rankIdx ][ threadsIdx ]; attempt++ ) {
 				// заполнение матрицы A случайными значениями
@@ -301,7 +314,7 @@ int main( void ) {
 
 				// подсчёт числа отличий
 				for( register int scheme = 1; scheme < 4; scheme++ )
-					if( fabs( result[ scheme ] - result[ 0 ] ) >= 0.5 )
+					if( fabs( result[ scheme ] - result[ 0 ] ) >= ERROR )
 						diffs[ scheme - 1 ]++;
 			}
 
@@ -311,6 +324,8 @@ int main( void ) {
 
 			for( register int scheme = 1; scheme < 4; scheme++ )
 				printf( "%5d %7d %5.3f %9.3f %13.3f\n", scheme, diffs[ scheme - 1 ], average[ scheme ], average[ 0 ] / average[ scheme ], average[ 0 ] / ( average[ scheme ] * threads[ threadsIdx ] ) );
+
+			fflush( stdout );
 		}
 
 		free( A ), free( B ), free( C );

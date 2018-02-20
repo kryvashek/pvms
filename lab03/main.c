@@ -313,7 +313,7 @@ int main( void ) {
 				average[ 3 ] = recalcAverage( average[ 3 ], attempt, period );
 
 				// подсчёт числа отличий
-				for( register int scheme = 1; scheme < 4; scheme++ )
+				for( register int scheme = 1; scheme < SCHEMES; scheme++ )
 					if( fabs( result[ scheme ] - result[ 0 ] ) >= ERROR )
 						diffs[ scheme - 1 ]++;
 			}
@@ -322,7 +322,7 @@ int main( void ) {
 						"Схема Отличий Время Ускорение Эффективность\n"
 						"%5d   --    %5.3f    --           --      \n", 0, average[ 0 ] );
 
-			for( register int scheme = 1; scheme < 4; scheme++ )
+			for( register int scheme = 1; scheme < SCHEMES; scheme++ )
 				printf( "%5d %7d %5.3f %9.3f %13.3f\n", scheme, diffs[ scheme - 1 ], average[ scheme ], average[ 0 ] / average[ scheme ], average[ 0 ] / ( average[ scheme ] * threads[ threadsIdx ] ) );
 
 			fflush( stdout );
